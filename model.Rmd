@@ -1,0 +1,199 @@
+---
+title: "NFL Draft 15 Model"
+author: "Li Liang"
+date: "Friday, April 24, 2015"
+output: html_document
+---
+
+## Intro
+##### I wanted to see if I could create a model to predict if a candidate should
+be drafted in the 2015 NFL draft using historical combine data and Madden 15
+player ratings. I'm a big fan of the Madden games and I believe they do a good
+job at rating players on their roster. I downloaded the data from the following
+sites and assumed if they had a Madden rating then they should be drafted. 
+Note: There were a few draft candidates with the same name as current NFL
+players. These were zeroed out. 
+
+##### http://maddenratings.weebly.com/madden-nfl-15.html
+
+##### http://nflcombineresults.com/nflcombinedata.php?year=all&pos=&college=
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, packages}
+library(ggplot2)
+library(plyr)
+library(aod)
+
+
+setwd('c:/users/li/version-control/nfl combine model/')
+playerstats <- read.csv('players.csv')
+```
+
+## Data overview
+
+##### There are 5346 players total form 1999-2015 with 14 variables. At this
+point, there appears to be many NA's for Wonderlic, Bench Press, Shuttle and
+3cone. The lack of Wonderlic scores was a surprise because I thought most
+candidates would have that published. 
+
+  
+```{r, echo=FALSE}
+# naming certain columns
+playerstats <- rename(playerstats, c("Height..in."="Height","Weight..lbs."="Weight", "Vert.Leap..in."="VertLeap", "Broad.Jump..in."="BroadJump"))
+
+# setting draft and pos as factors
+playerstats$Draft <- as.factor(playerstats$Draft)
+
+str(playerstats)
+summary(playerstats)
+```
+
+##### I wanted to explore the distribution of the 7 combine metrics. Wonderlic, Bench Press, Vertical Leap, Broad Jump, Shuttle, 3Cone and 40 yd dash. Grey being the previous draft candidates and red being the 2015 candidates.
+
+```{r, echo=FALSE, warning=FALSE}
+# roster of players from previous drafts 1999-2014 
+previous <- subset(playerstats, playerstats$Year!=2015)
+
+# this year's class
+current <- subset(playerstats, playerstats$Year==2015)
+
+ggplot() +
+  geom_histogram(aes(x=Wonderlic), data = previous, alpha = 0.8, color = 'grey', fill = 'white') +
+  geom_histogram(aes(x=Wonderlic), data = current , alpha = 0.3, color = 'darkred', fill = 'red') 
+
+ggplot() +
+  geom_histogram(aes(x=Bench.Press), data = previous, alpha = 0.8, color = 'grey', fill = 'white') +
+  geom_histogram(aes(x=Bench.Press), data = current , alpha = 0.3, color = 'darkred', fill = 'red') 
+
+ggplot() +
+  geom_histogram(aes(x=VertLeap), data = previous, alpha = 0.8, color = 'grey', fill = 'white') +
+  geom_histogram(aes(x=VertLeap), data = current , alpha = 0.3, color = 'darkred', fill = 'red') 
+
+ggplot() +
+  geom_histogram(aes(x=BroadJump), data = previous, alpha = 0.8, color = 'grey', fill = 'white') +
+  geom_histogram(aes(x=BroadJump), data = current , alpha = 0.3, color = 'darkred', fill = 'red') 
+
+ggplot() +
+  geom_histogram(aes(x=Shuttle), data = previous, alpha = 0.8, color = 'grey', fill = 'white') +
+  geom_histogram(aes(x=Shuttle), data = current , alpha = 0.3, color = 'darkred', fill = 'red') 
+
+ggplot() +
+  geom_histogram(aes(x=X3Cone), data = previous, alpha = 0.8, color = 'grey', fill = 'white') +
+  geom_histogram(aes(x=X3Cone), data = current , alpha = 0.3, color = 'darkred', fill = 'red') 
+
+ggplot() +
+  geom_histogram(aes(x=X40.Yard), data = previous, alpha = 0.8, color = 'grey', fill = 'white') +
+  geom_histogram(aes(x=X40.Yard), data = current , alpha = 0.3, color = 'darkred', fill = 'red') 
+
+
+```
+
+## Modeling
+
+##### I created a simple logistic classification model using past candidates combine performance metrics and Madden ratings to determine if the current candidates should be drafted or not. 
+
+##### Due to the poor data quality of Wonderlic metric, I'm setting all NA's to be zero. I am also using complete observations to train the model. Luckily, there are 2048 complete observations, this should be a good representative sample. Looks like out of 2408 observations, 770 or 38% were drafted to the NFL.
+
+```{r, echo=FALSE, warning=FALSE}
+
+# pairs(previous)
+previous$Wonderlic[is.na(previous$Wonderlic)] <- 0
+
+
+trainingdata <- previous[complete.cases(previous),]
+
+# the training data set with only complete observations and wonderlic NAs set to 0
+
+summary(trainingdata)
+#pairs(trainingdata)
+
+
+```
+
+### Training 1st trial
+
+##### I fit the classification model at first using position, height, weight, wonderlic, bench press, vertical leap, broad jump, shuttle, 3cone and 40 yd dash as predictors of whether or not the candidate is drafted.
+
+##### From the model output, it does not seem bench press is too significant of a predictor. I feed the input data back into the model to validate. From the confusion matrix, the model drafted 412 out of 2408 with 157 false positives and 515 false negatives. This gives a precision of 770 / (770 + 157) = 83% and recall of 770 / (770 + 515) = 60%.
+
+```{r, echo=FALSE, warning=FALSE}
+
+lcm = glm(Draft~POS+Height+Weight+Wonderlic+Bench.Press+VertLeap+BroadJump+Shuttle+X3Cone+X40.Yard, data=trainingdata, family=binomial)
+lcmprobs <- predict(lcm, trainingdata, type='response')
+
+# this model gives a probability of being classified as 0 or 1. So if greater than
+# 50% then draft
+
+lcmpred = ifelse(lcmprobs>0.5, 1, 0)
+summary(lcm)
+
+#confusion matrix
+table(trainingdata$Draft, lcmpred)
+```
+
+### Training 2nd trial
+
+##### Looking at the predictive power and collinearity tables, I decided to take out bench press (not significant), wonderlic (poor data), broad jump (not significant), height and weight (positionally unique) for the next iteration. This time the model drafted  361 out of 2408 with 150 false positives and 559 false negatives. A slight bump in false negatives but not too big of a difference.
+
+
+```{r, echo=FALSE, warning=FALSE}
+#cor(model.matrix(lcm)[,-1])
+
+
+lcm2 = glm(Draft~POS+VertLeap+Shuttle+X3Cone+X40.Yard,
+          data=trainingdata, family=binomial)
+#model validation 
+
+lcm2probs <- predict(lcm2, trainingdata, type='response')
+
+lcm2pred = ifelse(lcm2probs>0.5, 1, 0)
+
+summary(lcm2)
+
+table(trainingdata$Draft, lcm2pred)
+
+```
+
+## Results
+
+##### I tested the second model with the 2015 draft class data and cross referenced with nfl.com rankings. http://www.nfl.com/top50
+Results below:
+
+Name                  |College | POS | NFL.com Ranking
+----------------------|--------|-----|----------------
+Dorial Green-Beckham	|Oklahoma|WR | 26
+Phillip Dorsett	      |Miami	 |WR | 47
+Mario Alford	        |West Virginia |	WR | 
+Kenny Bell	          |Nebraska	| WR|
+Justin Hardy	        |East Carolina	| WR|
+Ali Marpet	          |Hobart & William Smith	| OG|
+Trae Waynes	          |Michigan State	| CB| 10
+Jalen Collins	        |Louisiana State	| CB| 30
+Xavier Cooper	        |Washington State	| DT|
+Jake Fisher	          |Oregon	| OT| 45
+Kevin White           |West Virginia	| WR| 2 
+Amari Cooper	        |Alabama	| WR| 3
+J.J. Nelson	          |UAB	| WR|
+Senquez Golson	      |Mississippi	| CB|
+Stefon Diggs	        |Maryland	| WR|
+Kaelin Clay	          |Utah	| WR|
+Cameron Clear	        |Texas AM	| OT|
+Chris Conley	        |Georgia	| WR|
+Deon Long	            |Maryland	| WR|
+Derrick Lott	        |Tennessee-Chattanooga	| DT|
+DeAndrew White	      |Alabama	| WR|
+Tyler Lockett	        |Kansas State	| WR|
+Troy Hill	            |Oregon	| CB|
+
+
+```{r, echo=FALSE, warning=FALSE}
+# the training data did not include positions K, LS, P 
+
+lcm2testing <- predict(lcm2, current, type='response')
+
+#write.csv(current, file="draftplayers.csv")
+#write.csv(lcm2testing, file="draftresults.csv")
+```
+
+
