@@ -6,13 +6,7 @@ output: html_document
 ---
 
 ## Intro
-##### I wanted to see if I could create a model to predict if a candidate should
-be drafted in the 2015 NFL draft using historical combine data and Madden 15
-player ratings. I'm a big fan of the Madden games and I believe they do a good
-job at rating players on their roster. I downloaded the data from the following
-sites and assumed if they had a Madden rating then they should be drafted. 
-Note: There were a few draft candidates with the same name as current NFL
-players. These were zeroed out. 
+##### I wanted to see if I could create a model to predict if a candidate should be drafted in the 2015 NFL draft using historical combine data (1999-2014) and Madden 15 player ratings. I'm a big fan of the Madden games and I believe they do a good job at rating players on their roster. I downloaded the data from the following sites and assumed if they had a Madden rating then they should be drafted. Note: There were a few draft candidates with the same name as current NFL players. These were zeroed out. 
 
 ##### http://maddenratings.weebly.com/madden-nfl-15.html
 
